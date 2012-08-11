@@ -1,5 +1,10 @@
 core.logic projects
 
+* Important things to remember that I always forget
+** unification needs to work w/o constraints
+*** don't muck with LVar
+** LVar unification cases are necessary
+*** don't much with LVar
 * update-prefix, do we need this for disequality constraints?
 ** this is the case it's supposed to handle
 #+begin_src clojure
