@@ -2990,8 +2990,7 @@
 (defn process-dom [v dom]
   (fn [a]
     (cond
-     (lvar? v) (if-let [a (unify a v dom)] ;; TODO: why we really return nil from unify
-                 a nil)
+     (lvar? v) (unify a v dom)
      (member? dom v) a
      :else nil)))
 
