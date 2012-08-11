@@ -2120,7 +2120,7 @@
   (let [x (lvar 'x)
         y (lvar 'y)
         s ((!= x y) empty-s)]
-    (is (= (prefix ((:cm (:cs s)) 0)) (list (pair x y))))))
+    (is (= (prefix ((:cm (:tcs s)) 0)) (list (pair x y))))))
 
 (deftest test-!=-2 []
   (let [x (lvar 'x)
@@ -2135,8 +2135,8 @@
         s ((!= x y) empty-s)
         s ((== x 1) s)
         s ((== y 2) s)]
-    (is (empty? (:cm (:cs s))))
-    (is (empty? (:km (:cs s))))))
+    (is (empty? (:cm (:tcs s))))
+    (is (empty? (:km (:tcs s))))))
 
 (deftest test-!=-4 []
   (let [x (lvar 'x)
@@ -2144,8 +2144,8 @@
         s ((== x 1) empty-s)
         s ((== y 2) s)
         s ((!= x y) s)]
-    (is (empty? (:cm (:cs s))))
-    (is (empty? (:km (:cs s))))))
+    (is (empty? (:cm (:tcs s))))
+    (is (empty? (:km (:tcs s))))))
 
 (deftest test-!=-5 []
   (let [x (lvar 'x)
@@ -2153,14 +2153,14 @@
         s ((== x 1) empty-s)
         s ((!= x y) s)
         s ((== y 2) s)]
-    (is (empty? (:cm (:cs s))))
-    (is (empty? (:km (:cs s))))))
+    (is (empty? (:cm (:tcs s))))
+    (is (empty? (:km (:tcs s))))))
 
 (deftest test-!=-6 []
   (let [x (lvar 'x)
         y (lvar 'y)
         s ((!= x 1) empty-s)]
-    (is (= (prefix ((:cm (:cs s)) 0)) (list (pair x 1))))))
+    (is (= (prefix ((:cm (:tcs s)) 0)) (list (pair x 1))))))
 
 #_(deftest test-normalize-store []
   (let [x (lvar 'x)

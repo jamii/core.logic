@@ -117,7 +117,7 @@
 ;; cKanren protocols
 
 (defprotocol ISubstitutionsCLP
-  (update [this x v]))
+  (update [this x v] [this x v ctype]))
 
 ;; -----------------------------------------------------------------------------
 ;; Constraint Store
@@ -1035,7 +1035,7 @@
       nil))
   IUnifyWithFiniteDomain
   (unify-with-domain [v u s]
-     (unify-with-refinable* v u s))
+    (unify-with-refinable* v u s))
   IUnifyWithIntervalFD
   (unify-with-interval [v u s]
     (unify-with-refinable* v u s))
@@ -1049,7 +1049,12 @@
   (walk-term [v s]
     (walk-term (:v v) s)))
 
-(deftype Substitutions [s l cs]
+;; s - substutition map
+;; l - list version of substitution map, for tree constraints
+;; cs - general constraint store
+;; tcs - tree constraint store
+
+(deftype Substitutions [s l cs tcs]
   Object
   (equals [this o]
     (or (identical? this o)
@@ -1069,13 +1074,14 @@
       :s s
       :l l
       :cs cs
+      :tcs tcs
       not-found))
 
   ISubstitutions
   (ext-no-check [this u v]
     (Substitutions. (assoc s u v)
                     (cons (pair u v) l)
-                    cs))
+                    cs tcs))
 
   (walk [this v]
     (walk this v false))
@@ -1090,8 +1096,12 @@
 
   ISubstitutionsCLP
   (update [this x v]
+    (update this x v :default))
+  (update [this x v ctype]
     ((if-not (refinable? v)
-       (run-constraints* (if (lvar? v) [x v] [x]) cs)
+       (run-constraints*
+        (if (lvar? v) [x v] [x])
+        (if (= ctype :tree) tcs cs))
        identity)
      (if *occurs-check*
        (ext this x v)
@@ -1107,10 +1117,11 @@
   (take* [this] this))
 
 (defn- make-s
-  ([] (Substitutions. clojure.lang.PersistentHashMap/EMPTY () (make-cs)))
-  ([m] (Substitutions. m () (make-cs)))
-  ([m l] (Substitutions. m l (make-cs)))
-  ([m l cs] (Substitutions. m l cs)))
+  ([] (Substitutions. clojure.lang.PersistentHashMap/EMPTY () (make-cs) (make-cs)))
+  ([m] (Substitutions. m () (make-cs) (make-cs)))
+  ([m l] (Substitutions. m l (make-cs) (make-cs)))
+  ([m l cs] (Substitutions. m l cs (make-cs)))
+  ([m l cs tcs] (Substitutions. m l cs tcs)))
 
 (def empty-s (make-s))
 (def empty-f (fn []))
@@ -1121,7 +1132,7 @@
 (defn to-s [v]
   (let [s (reduce (fn [m [k v]] (assoc m k v)) clojure.lang.PersistentHashMap/EMPTY v)
         l (reduce (fn [l [k v]] (cons (Pair. k v) l)) '() v)]
-    (make-s s l (make-cs))))
+    (make-s s l (make-cs) (make-cs))))
 
 ;; =============================================================================
 ;; Logic Variables
@@ -1190,12 +1201,13 @@
     (let [m (:s s)
           l (:l s)
           cs (:cs s)
+          tcs (:tcs s)
           lv (lvar 'ignore) ]
       (if (contains? m u)
         s
         (make-s (assoc m u lv)
                 (cons (Pair. u lv) l)
-                cs)))))
+                cs tcs)))))
 
 (defn lvar
   ([]
@@ -1909,9 +1921,17 @@
 
 (def u# fail)
 
-(defn updateg [u v]
-  (fn [a]
-    (update a u v)))
+(defn updateg
+  ([u v]
+     (fn [a]
+       (update a u v)))
+  ([u v ctype]
+     (fn [a]
+       (update a u v ctype))))
+
+;; update-prefix is to handle tree constraints
+;; we only run tree constraints here, fd constraints
+;; are handled by unification
 
 (defn update-prefix [a ap]
   (let [l (:l a)]
@@ -1919,20 +1939,19 @@
        (if (identical? l lp)
          s#
          (let [[lhs rhs] (first lp)]
-          (composeg
-           (updateg lhs rhs)
-           (loop (rest lp)))))) (:l ap))))
-
-;; NOTE: this seems costly if the user introduces a constraint
-;; update-prefix should be called only if we have a constraint
-;; in the store that needs this
+           (composeg
+            (if (pos? (count ((-> a :tcs :km) lhs)))
+              (updateg lhs rhs :tree)
+              (fn [a]
+                (ext-no-check a lhs rhs)))
+            (loop (rest lp)))))) (:l ap))))
 
 (defn ==
   "A goal that attempts to unify terms u and v."
   [u v]
   (fn [a]
     (when-let [ap (unify a u v)]
-      (if (pos? (count (:cs a)))
+      (if (pos? (count (:tcs a)))
         ((update-prefix a ap) a)
         ap))))
 
@@ -2973,19 +2992,27 @@
 
 (defn addcg [c]
   (fn [a]
-    (make-s (:s a) (:l a) (addc (:cs a) c))))
+    (if (tree-constraint? c)
+      (make-s (:s a) (:l a) (:cs a) (addc (:tcs a) c))
+      (make-s (:s a) (:l a) (addc (:cs a) c) (:tcs a)))))
 
 (defn updatecg [c]
   (fn [a]
-    (make-s (:s a) (:l a) (updatec (:cs a) c))))
+    (if (tree-constraint? c)
+      (make-s (:s a) (:l a) (:cs a) (updatec (:tcs a) c))
+      (make-s (:s a) (:l a) (updatec (:cs a) c) (:tcs a)))))
 
 (defn checkcg [c]
   (fn [a]
-    (make-s (:s a) (:l a) (checkc (:cs a) c a))))
+    (if (tree-constraint? c)
+      (make-s (:s a) (:l a) (:cs a) (checkc (:tcs a) c a))
+      (make-s (:s a) (:l a) (checkc (:cs a) c a) (:tcs a)))))
 
 (defn remcg [c]
   (fn [a]
-    (make-s (:s a) (:l a) (remc (:cs a) c))))
+    (if (tree-constraint? c)
+      (make-s (:s a) (:l a) (:cs a) (remc (:tcs a) c))
+      (make-s (:s a) (:l a) (remc (:cs a) c) (:tcs a)))))
 
 (defn process-dom [v dom]
   (fn [a]
@@ -3057,7 +3084,9 @@
        (-force-ans v x)) a)))
 
 (defn running [a c]
-  (make-s (:s a) (:l a) (runc (:cs a) c)))
+  (if (tree-constraint? c)
+    (make-s (:s a) (:l a) (:cs a) (runc (:tcs a) c))
+    (make-s (:s a) (:l a) (runc (:cs a) c) (:tcs a))))
 
 (defn run-constraint [c]
   (fn [a]
@@ -3111,13 +3140,14 @@
        (verify-all-bound a constrained)
        ((onceo (force-ans constrained)) a)))))
 
-(defn reify-constraints [v r cs]
-  (let [rcs (->> (vals (:cm cs))
-                 (filter reifiable?)
-                 (map #(reifyc % v r)))]
-    (if (empty? rcs)
-      (choice (list v) empty-f)
-      (choice (list `(~v :- ~@rcs)) empty-f))))
+(defn reify-constraints [v r]
+  (fn [a]
+    (let [rcs (->> (vals (-> a :tcs :cm ))
+                   (filter reifiable?)
+                   (map #(reifyc % v r)))]
+      (if (empty? rcs)
+        (choice (list v) empty-f)
+        (choice (list `(~v :- ~@rcs)) empty-f)))))
 
 (defn reifyg [x]
   (all
@@ -3128,7 +3158,7 @@
        (if (zero? (count r))
          (choice (list v) empty-f)
          (let [v (walk* r v)]
-           (reify-constraints v r (:cs a))))))))
+           ((reify-constraints v r) a)))))))
 
 ;; NOTE: only used for goals that must be added to store to work
 ;; a simple way to add the goal to the store and return that goal
@@ -3687,14 +3717,13 @@
   (fn [a]
     (let [p (prefix c)
           cid (id c)
-          cs (:cs a)
+          tcs (:tcs a)
           cids (->> (seq (recover-vars p))
-                    (mapcat (:km cs))
+                    (mapcat (:km tcs))
                     (remove nil?)
                     (into #{}))
           neqcs (->> (seq cids)
-                     (map (:cm cs))
-                     (filter tree-constraint?)
+                     (map (:cm tcs))
                      (remove #(= (id %) cid)))]
       (loop [a a neqcs (seq neqcs)]
         (if neqcs
@@ -3702,7 +3731,7 @@
                 pp (prefix oc)]
             (cond
              (prefix-subsumes? pp p) ((remcg c) a)
-             (prefix-subsumes? p pp) (recur (make-s (:s a) (:l a) (remc cs oc))
+             (prefix-subsumes? p pp) (recur (make-s (:s a) (:l a) (:cs a) (remc tcs oc))
                                             (next neqcs))
              :else (recur a (next neqcs))))
           ((updatecg c) a))))))
