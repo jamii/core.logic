@@ -7,6 +7,26 @@ core.logic projects
 *** look for constraints that go together
 *** constraints that work together should run even if we don't have singleton domains
 *** need to look much closer at exactly how this works in Mozart/Oz
+** Issues
+*** constraints normally only run when we have a singleton
+**** not desirable, we'll have to search to large of a space
+**** one issue is that a constraint can update the store
+***** trigger running the constraint again, stack overflow
+***** have running list in ConstraintStore to prevent that
+**** how can we prevent a constraint from triggering itself?
+***** a depth var?
+****** only applies to constraints in the store
+****** update -> run-constraints* triggers a depth increase
+****** no constraint can run if it was running in previous depth
+****** constraint store tracks depth
+******* construct new constraint store with clear running
+**** we probably need to specify which constraints only run on singletons
+***** ...
+**** performance is a concern, was previously quite bad with stones / dinesman
+**** simple solution?
+***** don't run constraints if the value hasn't changed
+****** won't catch the constraint that triggered it
+***** OR, each constraint tracks if args have actually changed
 * Sugar for FD equations, (eqfd (= (+ x y z) (+ a b c)))
 ** TODO Needs eqfd macro sugar
 ** TODO Needs domain inference

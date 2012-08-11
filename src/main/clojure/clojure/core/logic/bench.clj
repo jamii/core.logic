@@ -406,6 +406,10 @@
   ;; "Finite Domain Constraint Programming in Oz. A Tutorial." (Schulte & Smolka)
   ;; currently none of the constraints above trigger any refinements!
   (simplefd)
+  ;; ideally by the time we get to end, there's nothing more to do!
+
+  ;; the reason constraints don't run again is because we want to reach
+  ;; a fixed point
   )
 
 ;; =============================================================================

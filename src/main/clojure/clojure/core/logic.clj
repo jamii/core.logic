@@ -3407,7 +3407,7 @@
 
 (defn *fdc [u v w]
   (letfn [(safe-div [n c a]
-            (if (zero? n) c (/ a n)))]
+            (if (zero? n) c (quot a n)))]
    (reify
      clojure.lang.IFn
      (invoke [this s]
