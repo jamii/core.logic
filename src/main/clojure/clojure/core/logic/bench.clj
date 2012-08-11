@@ -410,6 +410,14 @@
 
   ;; the reason constraints don't run again is because we want to reach
   ;; a fixed point
+
+  ;; why do we see +fd run three times here? 
+  (run* [q]
+    (fresh [x y]
+      (== q [x y ])
+      (infd x y (domain 1 2 3))
+      (+fd x y 3)
+      (== x 1)))
   )
 
 ;; =============================================================================

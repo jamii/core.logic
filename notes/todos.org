@@ -1,5 +1,42 @@
 core.logic projects
 
+* update-prefix, do we need this for disequality constraints?
+** this is the case it's supposed to handle
+#+begin_src clojure
+  (== [x 1] [2 y])
+#+end_src
+not triggered the same way as finite domain constraints
+** this means fd constraints are running twice!
+** we only want to run update-prefix if prefix constraint in the store
+** updateg, we only want to run prefix constraints
+** Implementation
+*** Adding prefix set to ConstraintStore
+**** prefixs set in ConstraintStore
+***** check if constraint needs-prefix?, if so add it
+***** when removing constraint, check if needs-prefix?, if so remove it
+**** == only calls update-prefix if prefixs is not empty
+**** update-prefix
+***** if lhs has prefix constraint, then need to call new update goal
+**** new update goal
+***** only used to deal with prefix constraints
+*** Two Constraint Stores
+**** addcg, updatecg, remcg, checkcg would need to be changed
+**** SubstitionMap would need new prefix constraint store field
+**** updateg would take an optional argument about which store to use
+***** by default use the normal store
+***** (updateg ... :prefix) would use the prefix store
+**** advantage here is performance
+***** prefix set approach would require scanning
+***** ((:km (:cm a) v) -> c set, filter prefix constraints
+* Summary of issues around fixing constraint propagation
+** calculating fixpoint was easy before
+*** only run constraints on singletons, running constraints can't run
+** calculating fixpoint if we want earlier propagation is harder
+*** constraints need to be able to rerun
+**** but we want that only if something has actually changed
+*** avoiding non-termination
+**** can we avoid constraints running over and over again?
+** do we actually understand how fixpoint is reached currently? :P
 * Deeper support for more sophisticated fd equations
 ** constraints normally only run when we have a singleton
 *** not desirable, we'll have to search to large of a space
@@ -13,13 +50,40 @@ core.logic projects
 ***** no constraint can run if it was running in previous depth
 ***** constraint store tracks depth
 ****** construct new constraint store with clear running
+**** or we could use a stack and avoid vars
+***** vector push cid onto it
+***** when getting constraints, pop running
+***** leave out constraints that ran prior on the stack
+***** allows constraints to re-run if another constraint triggers it
+**** does the stack approach handle running constraints too often
+***** is it possible for vars to get update which aren't changing?
+#+begin_src clojure
+  (defn simplefd []
+    (run* [q]
+      (fresh [x y]
+        (== q [x y])
+        (infd x y (interval 0 9))
+        (+fd x y 9)
+        (fresh [p0 p1]
+          (*fd 2 x p0)
+          (*fd 4 y p1)
+          (+fd p0 p1 24)))))
+#+end_src
+that is, how do we get to a fixed point? stable point?
+simple solution, in update, don't call update unless
 *** do we need to specify which constraints only run on singletons?
+**** definitely, no reason for distinctfd to run in any other case
+**** can put this logic in the consraint store?
 *** performance is a concern, was previously quite bad with stones / dinesman
 **** perhaps due to pointless constraint running?
-*** simple solution?
+*** simple solutions?
 **** don't run constraints if the value hasn't changed
-***** won't catch the constraint that triggered it
+***** good, won't catch the constraint that triggered it
+***** bad, breaks checking (+fd x 1 x) etc
+**** constraints could return a fn which will do the updating?
+***** but we don't know if a constraint is longer relevant w/o the update
 **** OR, each constraint tracks if args have actually changed
+***** a bit annoying? Every constraint has to remember to do this ...
 * Sugar for FD equations, (eqfd (= (+ x y z) (+ a b c)))
 ** TODO Needs eqfd macro sugar
 ** TODO Needs domain inference
