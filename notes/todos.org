@@ -5,6 +5,15 @@ core.logic projects
 *** don't muck with LVar
 ** LVar unification cases are necessary
 *** don't much with LVar
+* Unification on Refinable
+** these call update triggering constraints
+*** seems to go against what we just described above
+*** also means disequality constraints might cause problems on domain types
+**** avoided if != is polymorphic?
+** was it a bad idea to join domain & substitution map?
+*** unification is just a constraint, can / should trigger other constraints
+*** != on intervals broken because != no polymorphic
+*** to do disequality simply prefix list is too useful
 * update-prefix, do we need this for disequality constraints?
 ** this is the case it's supposed to handle
 #+begin_src clojure
