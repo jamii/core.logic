@@ -1054,6 +1054,9 @@
 ;; cs - general constraint store
 ;; tcs - tree constraint store
 
+;; NOTE: we could make occurs-check a field to avoid overhead
+;; of checking dynamic var
+
 (deftype Substitutions [s l cs tcs]
   Object
   (equals [this o]
