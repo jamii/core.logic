@@ -297,7 +297,9 @@
   ;; yep, 12917 force-ans calls, seems very excessive
   
   ;; works but is very slow, still much faster than original Prolog solution
-  (cryptarithfd-1)
+  ;; ~3s 1000X too slow
+  (dotimes [_ 5]
+    (time (cryptarithfd-1)))
 
   ;; ah, we don't actually want the intermediate values to generate
   ;; so many possibilities

@@ -955,13 +955,7 @@
 ;; =============================================================================
 ;; Substitutions
 
-(declare empty-s)
-(declare choice)
-(declare lvar)
-(declare lvar?)
-(declare pair)
-(declare lcons)
-(declare run-constraints*)
+(declare empty-s choice lvar lvar? pair lcons run-constraints* composeg)
 
 (defn occurs-check [s u v]
   (let [v (walk s v)]
@@ -1102,9 +1096,12 @@
     (update this x v :default))
   (update [this x v ctype]
     ((if-not (refinable? v)
-       (run-constraints*
-        (if (lvar? v) [x v] [x])
-        (if (= ctype :tree) tcs cs))
+       (let [to-check (if (lvar? v) [x v] [x])]
+         (if (= ctype :tree)
+           (run-constraints* to-check tcs)
+           (composeg
+            (run-constraints* to-check cs)
+            (run-constraints* to-check tcs))))
        identity)
      (if *occurs-check*
        (ext this x v)
