@@ -269,7 +269,7 @@
 ;; Cryptarithmetic Puzzle
 
 (defn cryptarithfd-1 []
-  (run* [q]
+  (run-nc 1 [q]
     (fresh [s e n d m o r y]
       (== q [s e n d m o r y])
       (infd s e n d m o r y (interval 0 9))
@@ -282,8 +282,8 @@
 
 ;; Bratko 3rd ed pg 343
 
-#_(defn cryptarithfd-2 []
-  (run* [q]
+(defn cryptarithfd-2 []
+  (run-nc 1 [q]
     (fresh [d o n a l g e r b t]
       (== q [d o n a l g e r b t])
       (infd d o n a l g e r b t (interval 0 9))
@@ -298,12 +298,18 @@
   
   ;; works but is very slow, still much faster than original Prolog solution
   ;; ~3s 1000X too slow
+
+  ;; 14ms now, respectable now tho still shy of 3ms of SWI-Prolog
   (dotimes [_ 5]
-    (time (cryptarithfd-1)))
+    (time
+     (dotimes [_ 100]
+       (cryptarithfd-1))))
 
   ;; ah, we don't actually want the intermediate values to generate
   ;; so many possibilities
-  (cryptarithfd-2)
+  ;; 44s!
+  (time (cryptarithfd-2))
+  ;; ([5 2 6 4 8 1 9 7 3 0])
 
   ;; perhaps in the case where the domain is large? this needs a lot more
   ;; thought
@@ -402,7 +408,10 @@
       (fresh [p0 p1]
         (*fd 2 x p0)
         (*fd 4 y p1)
-        (+fd p0 p1 24)))))
+        (+fd p0 p1 24)
+        (fn [a]
+          (println (map #(walk a %) [x y p0 p1]))
+          a)))))
 
 (comment
   ;; "Finite Domain Constraint Programming in Oz. A Tutorial." (Schulte & Smolka)

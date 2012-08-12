@@ -926,7 +926,7 @@
     (ConstraintStore. km cm cid (conj running (id c))))
   (constraints-for [this x]
     (when-let [ids (get km x)]
-      (map cm (remove running ids))))
+      (map cm ids)))
   ;; (update-proc [this id proc]
   ;;   (if-let [c (get cm id)]
   ;;     (let [ncm (assoc cm id (with-proc c proc))]
@@ -1095,7 +1095,7 @@
   (update [this x v]
     (update this x v :default))
   (update [this x v ctype]
-    ((if-not (refinable? v)
+    ((if (not= (walk this x) v)
        (let [to-check (if (lvar? v) [x v] [x])]
          (if (= ctype :tree)
            (run-constraints* to-check tcs)
@@ -3160,36 +3160,17 @@
          (let [v (walk* r v)]
            ((reify-constraints v r) a)))))))
 
-;; NOTE: only used for goals that must be added to store to work
-;; a simple way to add the goal to the store and return that goal
-;; with its id assigned
-
-;; (defn addc* [a c]
-;;   (let [ncs (addc (:cs a) c)
-;;         c ((:cm ncs) (dec (:cid ncs)))
-;;         a (make-s (:s a) (:l a) ncs)]
-;;     (pair c a)))
-
-;; (defn cgoal [c]
-;;   (fn [a]
-;;     (if (runnable? c a)
-;;       (if (needs-store? c)
-;;         (let [[c a] (addc* a c)]
-;;           (when-let [a (c (running a c))]
-;;             ((checkcg c) a)))
-;;         (when-let [a (c a)]
-;;           (if (relevant? c a)
-;;             ((addcg c) a)
-;;             a)))
-;;       ((addcg c) a))))
-
 (defn cgoal [c]
   (fn [a]
     (if (runnable? c a)
-      (when-let [a (c a)]
-        (if (relevant? c a)
-          ((addcg c) a)
-          a))
+      (let [a ((addcg c) a)
+            cs (if (tree-constraint? c)
+                 (:tcs a)
+                 (:cs a))
+            c ((:cm cs) (dec (:cid cs)))]
+        ((composeg
+          (fn [a] (c a))
+          (checkcg c)) a))
       ((addcg c) a))))
 
 ;; =============================================================================
