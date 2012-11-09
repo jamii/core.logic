@@ -415,7 +415,7 @@
    than intervals when only a few values are possible."
   [& args]
   (when (seq args)
-    (sorted-set->domain (into (sorted-set) args))))
+    (sorted-set->domain (into (sorted-set) (drop-while #(neg? %) args)))))
 
 (defmethod print-method FiniteDomain [x ^Writer writer]
   (.write writer (str "<domain:" (string/join " " (seq (:s x))) ">")))
@@ -602,9 +602,10 @@
    is large."
   ([ub] (IntervalFD. 0 ub))
   ([lb ub]
-     (if (zero? (- ub lb))
-       ub
-       (IntervalFD. lb ub))))
+     (let [lb (max lb 0)]
+       (if (zero? (- ub lb))
+         ub
+         (IntervalFD. lb ub)))))
 
 (defn intersection* [is js]
   (loop [is (seq (intervals is)) js (seq (intervals js)) r []]
