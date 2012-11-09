@@ -154,7 +154,6 @@
   (addc [this c])
   (updatec [this c])
   (remc [this c])
-  (runc [this c state])
   (constraints-for [this x ws])
   (migrate [this u v]))
 
@@ -826,9 +825,8 @@
 ;; cm  - mapping constraint ids to to actual constraints
 ;; cid - the current constraint id, an integer, incremented
 ;;       everytime we add a constraint to the store
-;; running - set of running constraint ids
 
-(deftype ConstraintStore [km cm cid running]
+(deftype ConstraintStore [km cm cid]
   clojure.lang.ILookup
   (valAt [this k]
     (.valAt this k nil))
@@ -837,14 +835,13 @@
       :km km
       :cm cm
       :cid cid
-      :running running
       not-found))
   IConstraintStore
   (addc [this c]
     (let [vars (var-rands c)
           c (with-id c cid)
           cs (reduce (fn [cs v] (add-var cs v c)) this vars)]
-      (ConstraintStore. (:km cs) (:cm cs) (inc cid) running)))
+      (ConstraintStore. (:km cs) (:cm cs) (inc cid))))
   (updatec [this c]
     (let [oc (cm (id c))
           nkm (if (instance? clojure.core.logic.IRelevantVar c)
@@ -854,7 +851,7 @@
                             km))
                         km (var-rands oc))
                 km)]
-      (ConstraintStore. nkm (assoc cm (id c) c) cid running)))
+      (ConstraintStore. nkm (assoc cm (id c) c) cid)))
   (remc [this c]
     (let [vs (var-rands c)
           ocid (id c)
@@ -865,19 +862,15 @@
                             (assoc km v vcs))))
                       km vs)
           ncm (dissoc cm ocid)]
-      (ConstraintStore. nkm ncm cid running)))
-  (runc [this c state]
-    (if state
-      (ConstraintStore. km cm cid (conj running (id c)))
-      (ConstraintStore. km cm cid (disj running (id c)))))
+      (ConstraintStore. nkm ncm cid)))
   (constraints-for [this x ws]
     (when-let [ids (get km x)]
-      (filter #((watched-stores %) ws) (map cm (remove running ids)))))
+      (filter #((watched-stores %) ws) (map cm ids))))
   (migrate [this u v]
     (let [ucs (km u)
           vcs (km v)
           nkm (assoc (dissoc km u) v (into vcs ucs))]
-      (ConstraintStore. nkm cm cid running)))
+      (ConstraintStore. nkm cm cid)))
   clojure.lang.Counted
   (count [this]
     (count cm)))
@@ -890,10 +883,10 @@
         cid (:cid cs)
         nkm (update-in km [x] (fnil (fn [s] (conj s cid)) #{}))
         ncm (assoc cm cid c)]
-    (ConstraintStore. nkm ncm cid (:running cs))))
+    (ConstraintStore. nkm ncm cid)))
 
 (defn make-cs []
-  (ConstraintStore. {} {} 0 #{}))
+  (ConstraintStore. {} {} 0))
 
 ;; =============================================================================
 ;; SubstValue
@@ -2842,14 +2835,6 @@
   (fn [a]
     (assoc a :cs (remc (:cs a) c))))
 
-(defn runcg [c]
-  (fn [a]
-    (assoc a :cs (runc (:cs a) c true))))
-
-(defn stopcg [c]
-  (fn [a]
-    (assoc a :cs (runc (:cs a) c false))))
-
 (defn relevant? [c a]
   (let [id (id c)]
     (and (or ((-> a :cs :cm) id)
@@ -2860,7 +2845,7 @@
   (fn [a]
     (if (relevant? c a)
       (if (runnable? c a)
-        ((composeg* (runcg c) c (stopcg c)) a)
+        (c a)
         a)
       ((remcg c) a))))
 
