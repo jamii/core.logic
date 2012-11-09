@@ -3456,16 +3456,13 @@
            (when-not (n* x)
              (loop [y* (seq y*) s s]
                (if y*
-                 (let [y (first y*)
-                       v (or (get-dom s y) (walk s y))
-                       s (if-not (lvar? v)
-                           (cond
-                             (= x v) nil
-                             (member? v x) ((process-dom y (difference v x)) s)
-                             :else s)
-                           s)]
-                   (when s
-                     (recur (next y*) s)))
+                 (let [y (first y*)]
+                   (let-dom s [y yd]
+                     (let [s (if yd
+                               ((process-dom y (difference yd x)) s)
+                               s)]
+                       (when s
+                         (recur (next y*) s)))))
                  ((remcg this) s))))))
        IWithConstraintId
        (with-id [this id]
