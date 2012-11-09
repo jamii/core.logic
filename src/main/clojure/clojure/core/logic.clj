@@ -2987,10 +2987,10 @@
 (defmacro let-dom
   [a vars & body]
   (let [get-var-dom (fn [a [v b]]
-                      `(~b (let [v# (walk ~a ~v)]
-                             (if (lvar? v#)
-                               (get-dom ~a v#)
-                               v#))))]
+                      `(~v (walk ~a ~v)
+                        ~b (if (lvar? ~v)
+                             (get-dom ~a ~v)
+                             ~v)))]
    `(let [~@(mapcat (partial get-var-dom a) (partition 2 vars))]
       ~@body)))
 
