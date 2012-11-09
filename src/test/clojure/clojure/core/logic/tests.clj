@@ -1859,6 +1859,8 @@
     (is (= (get-dom s x)
            (multi-interval (interval 2 4) (interval 6 10))))))
 
+;; TODO: test that it is impossible to make finite domains w/ negative numbers
+
 ;; -----------------------------------------------------------------------------
 ;; cKanren
 

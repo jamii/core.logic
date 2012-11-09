@@ -335,12 +335,14 @@
       (infd s e n d m o r y (interval 0 9))
       (distinctfd q)
       (distribute q ::l/ff)
+      (annotate :debug true)
       (!=fd m 0) (!=fd s 0)
       (eqfd
         (=             (+ (* 1000 s) (* 100 e) (* 10 n) d
                           (* 1000 m) (* 100 o) (* 10 r) e)
            (+ (* 10000 m) (* 1000 o) (* 100 n) (* 10 e) y)))
-      (debug-doms))))
+      (debug-doms)
+      (annotate :debug false))))
 
 ;; Bratko 3rd ed pg 343
 
@@ -359,7 +361,22 @@
 (comment
   ;; FIXME: we don't see as much propagation as Oz, why not?
 
-  (cryptarithfd-1)
+  (cryptarithfd-1) ;; => ([9 5 6 7 1 0 8 2])
+
+  ;; according to OZ FD Tutorial, before search starts
+  ;; d = 2..8
+  ;; e = 4..7
+  ;; m = 1
+  ;; o = 0
+  ;; r = 2..8
+  ;; s = 9
+  ;; y = 2..8
+
+  ;; our crypt stops for some reason ...
+  ;; *fd, +fd can't add any new information if there's an exclusion from
+  ;; the middle of a domain
+
+  ;; FIXME: it also fails w/ new let-dom ...
 
   (time (cryptarithfd-1))
 
@@ -379,6 +396,19 @@
   ;; 128797.253
   ;; 17.7s w/ distribute 7X faster
   (time (cryptarithfd-2))
+
+  ;; this is the problem, I think, NOTE: we must look for propagation
+  (run* [q]
+    (fresh [y z]
+      (infd y (interval 1 10))
+      (infd z (interval 1 20))
+      (*fd y 2 z)
+      (!=fd y 2)
+      (debug-doms)))
+
+  ;; y * 2 = [2 6#10]
+  ;; z sould be [2 6#10] after intersection
+  ;; not 2#20!
   )
 
 ;; =============================================================================

@@ -1090,6 +1090,9 @@
               xs (if (lvar? v)
                    [x (root-var this v)]
                    [x])]
+          (when (-> this meta :debug)
+            (println "++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
+            (println "running constraints on" x))
           ((run-constraints* xs cs ::subst)
            (let [v (if sval? (assoc xv :v v) v)]
              (if *occurs-check*
@@ -1099,7 +1102,8 @@
           this))))
 
   (queue [this c]
-    (let [id (id c)]
+    (assoc this :cq (conj (or cq []) c))
+    #_(let [id (id c)]
       (if-not (cqs id)
         (-> this
           (assoc :cq (conj (or cq []) c))
@@ -2817,7 +2821,10 @@
         domp (get-dom a x)
         a    (add-attr a x ::fd dom)]
     (if (not= domp dom)
-      ((run-constraints* [x] (:cs a) ::fd) a)
+      (do
+        (when (-> a meta :debug)
+          (println "updating" x dom "was" domp))
+        ((run-constraints* [x] (:cs a) ::fd) a))
       a)))
 
 (defn addcg [c]
@@ -2969,20 +2976,31 @@
 (defn singleton-dom? [x]
   (integer? x))
 
+;; FIXME: restoring the cKanren let-dom invariant breaks our
+;; code, why?
+
 (defmacro let-dom
   [a vars & body]
   (let [get-var-dom (fn [a [v b]]
                       `(~v (walk ~a ~v)
                         ~b (if (lvar? ~v)
                              (get-dom ~a ~v)
-                             ~v)))]
+                             ~v))
+                      #_`(~b (let [v# (walk ~a ~v)]
+                             (if (lvar? v#)
+                               (get-dom ~a v#)
+                               v#))))]
    `(let [~@(mapcat (partial get-var-dom a) (partition 2 vars))]
       ~@body)))
 
 (defn resolve-storable-dom
   [a x dom]
   (if (singleton-dom? dom)
-    (update (rem-attr a x ::fd) x dom)
+    (do
+      (when (-> a meta :debug)
+       (println "--------------------------------------------------------------------------------")
+       (println x "became singleton:" dom))
+      (update (rem-attr a x ::fd) x dom))
     (ext-dom a x dom)))
 
 (defn update-var-dom
@@ -3218,14 +3236,20 @@
     clojure.lang.IFn
     (invoke [this s]
       (let-dom s [u du v dv]
+        (when (-> s meta :debug)
+          (println "--------------------------------------------------------------------------------")
+          (println "!=fdc" u du v dv))
         (cond
          (and (singleton-dom? du)
               (singleton-dom? dv)
               (= du dv)) nil
+
          (disjoint? du dv) s
+
          (singleton-dom? du)
          (when-let [vdiff (difference dv du)]
            ((process-dom v vdiff) s))
+
          :else (when-let [udiff (difference du dv)]
                  ((process-dom u udiff) s)))))
     IConstraintOp
@@ -3322,11 +3346,18 @@
                             [(- (lb dw) (ub dv)) (- (ub dw) (lb dv))])
               [vmin vmax] (if (domain? dv)
                             (bounds dv)
-                            [(- (lb dw) (ub du)) (- (ub dw) (lb du))])]
+                            [(- (lb dw) (ub du)) (- (ub dw) (lb du))])
+              wi (interval (+ umin vmin) (+ umax vmax))
+              ui (interval (- wmin vmax) (- wmax vmin))
+              vi (interval (- wmin umax) (- wmax umin))]
+          (when (-> s meta :debug)
+            (println "--------------------------------------------------------------------------------")
+            (println "+fdc: " u du v dv w dw)
+            (println " now: " ui vi wi))
           ((composeg*
-            (process-dom w (interval (+ umin vmin) (+ umax vmax)))
-            (process-dom u (interval (- wmin vmax) (- wmax vmin)))
-            (process-dom v (interval (- wmin umax) (- wmax umin)))
+            (process-dom w wi)
+            (process-dom u ui)
+            (process-dom v vi)
             (+fdc-guard u v w))
            s))))
     IConstraintOp
@@ -3335,11 +3366,9 @@
     IRelevant
     (-relevant? [this s]
       (let-dom s [u du v dv w dw]
-        (cond
-         (not (singleton-dom? du)) true
-         (not (singleton-dom? dv)) true
-         (not (singleton-dom? dw)) true
-         :else (not= (+ du dv) dw))))
+        (or (not (singleton-dom? du))
+            (not (singleton-dom? dv))
+            (not (singleton-dom? dw)))))
     IRunnable
     (runnable? [this s]
       ;; we want to run even if w doesn't have a domain
@@ -3374,6 +3403,7 @@
 
 (defn *fdc [u v w]
   (letfn [(safe-div [n c a t]
+            #_(if (zero? n) c (quot a n))
             (if (zero? n)
               c
               (let [q (quot a n)]
@@ -3402,6 +3432,9 @@
                             (safe-div vmin umax wmax :upper))
                vi (interval (safe-div umax vmin wmin :lower)
                             (safe-div umin vmax wmax :upper))]
+          (when (-> s meta :debug)
+            (println "--------------------------------------------------------------------------------")
+            (println "*fdc" u du v dv w dw))
            ((composeg*
              (process-dom w wi)
              (process-dom u ui)
@@ -3413,11 +3446,9 @@
      IRelevant
      (-relevant? [this s]
        (let-dom s [u du v dv w dw]
-         (cond
-          (not (singleton-dom? du)) true
-          (not (singleton-dom? dv)) true
-          (not (singleton-dom? dw)) true
-          :else (not= (* du dv) dw))))
+         (or (not (singleton-dom? du))
+             (not (singleton-dom? dv))
+             (not (singleton-dom? dw)))))
      IRunnable
      (runnable? [this s]
        ;; we want to run even if w doesn't have a domain
@@ -3452,6 +3483,9 @@
      (reify
        clojure.lang.IFn
        (invoke [this s]
+         (when (-> s meta :debug)
+           (println "--------------------------------------------------------------------------------")
+           (println "-distincfdc" x (walk s x)))
          (let [x (walk s x)]
            (when-not (n* x)
              (loop [y* (seq y*) s s]
